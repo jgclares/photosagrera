@@ -1,0 +1,4 @@
+# ignore all files under docs directory 
+docs/*
+# ignore credentials.json under code directory
+code/credentials.json
