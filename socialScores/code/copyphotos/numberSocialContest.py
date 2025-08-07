@@ -246,7 +246,8 @@ def get_command_line_arguments():
 # Example usage
 CLIENT_ID = "9fe1b9ad74d3891f14e1270708c20780"
 CLIENT_SECRET = "6d350ec3781bb674ef0dabe1688a2060"
-REFRESH_TOKEN = "rt-7lcspobmbyohbltighahxjlbtdfn"
+REFRESH_TOKEN = "rt-znct5efv2boz6avorywgpsxwnu8w"
+
 #source_directory = "/users/photosagrera/SOCIALES/CARGA DE FOTOS/05_GENER"
 load_directory ="/users/photosagrera/SOCIALES/CARGA DE FOTOS/"
 destination_directory = "/users/photosagrera/SOCIALES/PENDIENTES DE FALLO/AL JURADO"
