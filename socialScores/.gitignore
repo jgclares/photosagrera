@@ -2,3 +2,5 @@
 docs/*
 # ignore credentials.json under code directory
 code/credentials.json
+# ignore any credentials.json in the project
+credentials.json
