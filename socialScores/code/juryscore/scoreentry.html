@@ -22,7 +22,7 @@
         
         @media (max-width: 640px) {
             .grid-container {
-                grid-template-columns: 1fr; /* Columna única en móviles para mejor visualización */
+                grid-template-columns: 1fr; /* Columna única en móviles para millor visualització */
             }
         }
 
@@ -63,7 +63,7 @@
 
     <div class="w-full max-w-4xl">
         <h1 class="text-4xl md:text-5xl font-extrabold text-center mb-8 gradient-text">
-            Qüestionari de Puntuació
+            Qüestionari de Puntuació Version 2
         </h1>
 
         <div id="jurado-name-section" class="flex flex-col items-center justify-center space-y-4">
@@ -72,10 +72,6 @@
             </label>
             <input type="text" id="jurado-name" placeholder="Nom del Jurat" class="w-full md:w-1/2 p-3 text-lg text-gray-900 bg-white rounded-xl shadow-md border-2 border-indigo-500 focus:outline-none focus:border-indigo-700">
 
-            <label for="num-photos" class="text-xl font-medium text-gray-300">
-                Introduce el número total de fotos del concurso:
-            </label>
-            <input type="number" id="num-photos" placeholder="Número de fotos" class="w-full md:w-1/2 p-3 text-lg text-gray-900 bg-white rounded-xl shadow-md border-2 border-indigo-500 focus:outline-none focus:border-indigo-700">
 
             <button id="start-quiz-button" class="bg-indigo-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:bg-indigo-700 transition duration-300 ease-in-out">
                 Començar Votació
@@ -119,35 +115,53 @@
             const successMessage = document.getElementById('success-message');
             const errorMessage = document.getElementById('error-message');
 
-            let numRows = 0;
+            let photosCount = 0;
             const scores = [];
             
             // Lista de puntuaciones a usar
             const scoreValues = [4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10];
             
-            const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzweK3nVKXMpOBTUG-LyrYvB6RCPLd_CMgkDpaV-ulajRh1qPkKutMw4hxccSZQU93f/exec';
+            const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyFL-NK1vgN9uO64Y0dwBPprTrTd9BHM9n9OYaqMkdGPpVmBSbUMI_esl59ojkprJwx/exec';
 
-            startQuizButton.addEventListener('click', () => {
+            const WEB_APP_URL_GET = 'https://script.google.com/macros/s/AKfycbw25OXkWqEGi97LJkW_Fq9bG_T8561YlX0wgPlbO0BVac2tXeoGtSsVANnmzkfQbPBw/exec';
+
+            startQuizButton.addEventListener('click', async () => {
                 const juradoName = juradoNameInput.value.trim();
-                const photosCount = parseInt(numPhotosInput.value);
-
-                if (!juradoName || isNaN(photosCount) || photosCount <= 0) {
+                if (!juradoName) {
                     const nameError = document.createElement('p');
-                    nameError.textContent = 'Por favor, introduce un nombre y un número de fotos válido (> 0).';
+                    nameError.textContent = 'Por favor, introduce un nombre válido.';
                     nameError.className = 'text-red-500 mt-2';
                     juradoNameSection.appendChild(nameError);
                     setTimeout(() => nameError.remove(), 3000);
                     return;
                 }
 
-                numRows = photosCount;
-                scores.length = numRows;
-                scores.fill(null);
+                // Fetch number of rows from App Script
+                try {
+                    const response = await fetch(WEB_APP_URL_GET);
+                    const data = await response.json();
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+                    photosCount = data.numRows;
+                    if (isNaN(data.numRows) || data.numRows <= 0) {
+                        throw new Error('Número de filas inválido');
+                    }
+                    
+                    scores.length = data.numRows;
+                    scores.fill(null);
 
-                juradoNameSection.classList.add('hidden');
-                quizSection.classList.remove('hidden');
-                quizGrid.innerHTML = '';
-                generateQuizGrid();
+                    juradoNameSection.classList.add('hidden');
+                    quizSection.classList.remove('hidden');
+                    quizGrid.innerHTML = '';
+                    generateQuizGrid();
+                } catch (err) {
+                    const errorMsg = document.createElement('p');
+                    errorMsg.textContent = 'Error al obtener el número de fotos. Intenta de nuevo.';
+                    errorMsg.className = 'text-red-500 mt-2';
+                    juradoNameSection.appendChild(errorMsg);
+                    setTimeout(() => errorMsg.remove(), 3000);
+                }
             });
 
             const generateQuizGrid = () => {
@@ -163,7 +177,7 @@
                 quizHeader.appendChild(headerRow);
                 
                 // Genera las filas del cuestionario
-                for (let i = 0; i < numRows; i++) {
+                for (let i = 0; i < photosCount; i++) {
                     const row = document.createElement('div');
                     row.className = 'grid-container mb-2 items-center';
                     row.setAttribute('data-row-index', i);
