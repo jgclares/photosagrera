@@ -17,7 +17,7 @@ MINIMUM_SIMILARITY= 0.6
 scopes =  ["https://www.googleapis.com/auth/spreadsheets"]
 credentials = Credentials.from_service_account_file("credentials.json", scopes=scopes)
 
-# Load the "FOTOS SOCIAL 2024_2025_JGC" spreadsheet
+# Load the "Puntuaciones Concurso Social_JGC" spreadsheet
 puntuaciones_sheet_id = '1T6xYNXFp7XwlrPZJKYbt4nWYM9hSxuEggqNuieyqvS8'
 puntuaciones_client = gspread.authorize(credentials)
 puntuaciones_workbook = puntuaciones_client.open_by_key(puntuaciones_sheet_id)

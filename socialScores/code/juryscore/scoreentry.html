@@ -3,26 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QÜESTIONARI DE PUNTUACIONS</title>
+    <title>QÃœESTIONARI DE PUNTUACIONS</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Estilos personalizados para el gradiente del título */
+        /* Estilos personalizados para el gradiente del tÃ­tulo */
         .gradient-text {
             background-image: linear-gradient(to right, #60a5fa, #8b5cf6);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
-        /* Estilos para el contenedor de la cuadrícula en pantallas pequeñas */
+        /* Estilos para el contenedor de la cuadrÃ­cula en pantallas pequeÃ±as */
         .grid-container {
             display: grid;
-            grid-template-columns: repeat(14, 1fr); /* Ajuste para las nuevas 13 columnas de puntuación + la de foto */
+            grid-template-columns: repeat(14, 1fr); /* Ajuste para las nuevas 13 columnas de puntuaciÃ³n + la de foto */
             gap: 0.5rem;
         }
         
         @media (max-width: 640px) {
             .grid-container {
-                grid-template-columns: 1fr; /* Columna única en móviles para millor visualització */
+                grid-template-columns: 1fr; /* Columna Ãºnica en mÃ³viles para millor visualitzaciÃ³ */
             }
         }
 
@@ -63,7 +63,7 @@
 
     <div class="w-full max-w-4xl">
         <h1 class="text-4xl md:text-5xl font-extrabold text-center mb-8 gradient-text">
-            Qüestionari de Puntuació Version 2
+            QÃ¼estionari de PuntuaciÃ³ Version 2
         </h1>
 
         <div id="jurado-name-section" class="flex flex-col items-center justify-center space-y-4">
@@ -74,7 +74,7 @@
 
 
             <button id="start-quiz-button" class="bg-indigo-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:bg-indigo-700 transition duration-300 ease-in-out">
-                Començar Votació
+                ComenÃ§ar VotaciÃ³
             </button>
         </div>
 
@@ -88,14 +88,14 @@
 
             <div class="mt-8 text-center">
                 <p id="validation-message" class="text-red-500 mb-4 hidden font-medium text-sm">
-                    Falten puntuacions en algunes fotos. Si us plau, revisa i completa la votació.
+                    Falten puntuacions en algunes fotos. Si us plau, revisa i completa la votaciÃ³.
                 </p>
                 <button id="submit-button" class="bg-indigo-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:bg-indigo-700 transition duration-300 ease-in-out">
-                    Enviar Votació
+                    Enviar VotaciÃ³
                 </button>
-                <div id="loading-message" class="hidden mt-4 text-gray-400">Enviant votació...</div>
-                <div id="success-message" class="hidden mt-4 text-green-400">¡Votació enviada amb èxit!</div>
-                <div id="error-message" class="hidden mt-4 text-red-400">Error en enviar la votació. Intenta-ho de nou.</div>
+                <div id="loading-message" class="hidden mt-4 text-gray-400">Enviant votaciÃ³...</div>
+                <div id="success-message" class="hidden mt-4 text-green-400">Â¡VotaciÃ³ enviada amb Ã¨xit!</div>
+                <div id="error-message" class="hidden mt-4 text-red-400">Error en enviar la votaciÃ³. Intenta-ho de nou.</div>
             </div>
         </div>
     </div>
@@ -114,9 +114,12 @@
             const loadingMessage = document.getElementById('loading-message');
             const successMessage = document.getElementById('success-message');
             const errorMessage = document.getElementById('error-message');
+            
 
             let photosCount = 0;
             const scores = [];
+            var currentMonth = "";
+
             
             // Lista de puntuaciones a usar
             const scoreValues = [4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10];
@@ -127,45 +130,60 @@
 
             startQuizButton.addEventListener('click', async () => {
                 const juradoName = juradoNameInput.value.trim();
+
+                // Initial name validation
                 if (!juradoName) {
-                    const nameError = document.createElement('p');
-                    nameError.textContent = 'Por favor, introduce un nombre válido.';
-                    nameError.className = 'text-red-500 mt-2';
-                    juradoNameSection.appendChild(nameError);
-                    setTimeout(() => nameError.remove(), 3000);
+                    showError('Si us plau, introdueix un nom vÃ lid.');
                     return;
                 }
 
-                // Fetch number of rows from App Script
+                // Fetch configuration and row count from App Script
                 try {
                     const response = await fetch(WEB_APP_URL_GET);
                     const data = await response.json();
+                    
                     if (data.error) {
                         throw new Error(data.error);
                     }
-                    photosCount = data.numRows;
-                    if (isNaN(data.numRows) || data.numRows <= 0) {
-                        throw new Error('Número de filas inválido');
+
+                    // Validate configuration data
+                    if (!data.config || !data.config.MES_ACTUAL || !data.config.ESTAT) {
+                        throw new Error('ConfiguraciÃ³ incompleta');
                     }
+
+                    // Set current month from config
+                    currentMonth = data.config.MES_ACTUAL;
                     
-                    scores.length = data.numRows;
+
+                    // Check contest status
+                    const contestStatus = data.config.ESTAT.toLowerCase() === "obert";
+                    if (!contestStatus) {
+                        throw new Error(`La entrada de puntuacions per al mes ${currentMonth} no estÃ  oberta`);
+                    }
+
+                    // Process row count for grid generation
+                    photosCount = data.numRows;
+                    if (isNaN(photosCount) || photosCount <= 0) {
+                        throw new Error('NÃºmero de fotografies invÃ lid');
+                    }
+
+                    // Initialize scores array
+                    scores.length = photosCount;
                     scores.fill(null);
 
+                    // Show quiz section
                     juradoNameSection.classList.add('hidden');
                     quizSection.classList.remove('hidden');
                     quizGrid.innerHTML = '';
                     generateQuizGrid();
+
                 } catch (err) {
-                    const errorMsg = document.createElement('p');
-                    errorMsg.textContent = 'Error al obtener el número de fotos. Intenta de nuevo.';
-                    errorMsg.className = 'text-red-500 mt-2';
-                    juradoNameSection.appendChild(errorMsg);
-                    setTimeout(() => errorMsg.remove(), 3000);
+                    showError(err.message);
                 }
             });
 
             const generateQuizGrid = () => {
-                // Genera la cabecera de la cuadrícula
+                // Genera la cabecera de la cuadrÃ­cula
                 const headerRow = document.createElement('div');
                 headerRow.className = 'grid-container mb-2 font-bold text-center';
                 headerRow.innerHTML = '<div class="h-10 w-20 flex items-center justify-center"></div>';
@@ -188,7 +206,7 @@
                         const cell = document.createElement('button');
                         cell.className = 'cell-button text-sm';
                         cell.setAttribute('data-score-value', score);
-                        cell.setAttribute('aria-label', `Seleccionar puntuació ${score} en la fila ${i + 1}`);
+                        cell.setAttribute('aria-label', `Seleccionar puntuaciÃ³ ${score} en la fila ${i + 1}`);
                         cell.textContent = score;
                         cell.addEventListener('click', handleCellClick);
                         row.appendChild(cell);
@@ -232,9 +250,9 @@
                 successMessage.classList.add('hidden');
                 errorMessage.classList.add('hidden');
 
-                const juradoName = juradoNameInput.value.trim();
                 const data = {
-                    juradoName: juradoName,
+                    juradoName: juradoNameInput.value.trim(),
+                    month: currentMonth,
                     scores: scores
                 };
 
@@ -257,6 +275,15 @@
                     submitButton.disabled = false;
                 });
             });
+
+            // Helper function to show errors
+            const showError = (message) => {
+                const errorMsg = document.createElement('p');
+                errorMsg.textContent = message;
+                errorMsg.className = 'text-red-500 mt-2';
+                juradoNameSection.appendChild(errorMsg);
+                setTimeout(() => errorMsg.remove(), 3000);
+            };
         });
     </script>
 </body>
