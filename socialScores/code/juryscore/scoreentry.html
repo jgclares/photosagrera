@@ -63,7 +63,7 @@
 
     <div class="w-full max-w-4xl">
         <h1 class="text-4xl md:text-5xl font-extrabold text-center mb-8 gradient-text">
-            Qüestionari de Puntuació Version 2
+            Qüestionari de Puntuació 
         </h1>
 
         <div id="jurado-name-section" class="flex flex-col items-center justify-center space-y-4">
@@ -124,9 +124,9 @@
             // Lista de puntuaciones a usar
             const scoreValues = [4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10];
             
-            const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyFL-NK1vgN9uO64Y0dwBPprTrTd9BHM9n9OYaqMkdGPpVmBSbUMI_esl59ojkprJwx/exec';
+            const WEB_APP_URL_POST = 'https://script.google.com/macros/s/AKfycbxPF9G4h-ZLITGnELDxkuligq2DeBcWHemz6pPfApZOSLAsXOco9p-8LJ8fJxrFORnDig/exec';
 
-            const WEB_APP_URL_GET = 'https://script.google.com/macros/s/AKfycbw25OXkWqEGi97LJkW_Fq9bG_T8561YlX0wgPlbO0BVac2tXeoGtSsVANnmzkfQbPBw/exec';
+            const WEB_APP_URL_GET = 'https://script.google.com/macros/s/AKfycbzKQNDiI2E25m62U1hwjwdYRbjG-kTfkrb5igDw02OPRBpsdVjfGDyfMKbQKwRN7lEcPw/exec';
 
             startQuizButton.addEventListener('click', async () => {
                 const juradoName = juradoNameInput.value.trim();
@@ -256,7 +256,7 @@
                     scores: scores
                 };
 
-                fetch(WEB_APP_URL, {
+                fetch(WEB_APP_URL_POST, {
                     method: 'POST',
                     mode: 'no-cors',
                     body: JSON.stringify(data),

@@ -55,7 +55,7 @@ function doGet(e) {
     }
 
     // If config is ok, proceed with getting sheet data
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(month);
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(config.MES_ACTUAL);
     if (!sheet) {
       return ContentService.createTextOutput(JSON.stringify({
         error: `No s'ha trobat el full per a les puntuacions del mes ${month}.`,
