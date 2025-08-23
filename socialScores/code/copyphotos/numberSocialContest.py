@@ -2,6 +2,7 @@ import sys
 import requests
 import os
 import gspread
+from gspread_formatting import *
 import time
 import sheetFormat
 import urllib.parse
@@ -12,22 +13,34 @@ from difflib import SequenceMatcher
 
 MINIMUM_SIMILARITY= 0.6
 
+# HiDrive API credentials
+CLIENT_ID = "9fe1b9ad74d3891f14e1270708c20780"
+CLIENT_SECRET = "6d350ec3781bb674ef0dabe1688a2060"
+REFRESH_TOKEN = "rt-znct5efv2boz6avorywgpsxwnu8w"
+
+#source_directory = "/users/photosagrera/SOCIALES/CARGA DE FOTOS/05_GENER"
+load_directory ="/users/photosagrera/SOCIALES/CARGA DE FOTOS/"
+destination_directory = "/users/photosagrera/SOCIALES/PENDIENTES DE FALLO/AL JURADO"
+
+# Set up Google Sheets API credentials
 # Authenticate using your Service Account key (credentials.json)
 # E-mail asociado a la cuenta de servicio: photo-sheet-882@optimum-tea-418218.iam.gserviceaccount.com
 scopes =  ["https://www.googleapis.com/auth/spreadsheets"]
 credentials = Credentials.from_service_account_file("credentials.json", scopes=scopes)
 
-# Load the "Puntuaciones Concurso Social_JGC" spreadsheet
-puntuaciones_sheet_id = '1T6xYNXFp7XwlrPZJKYbt4nWYM9hSxuEggqNuieyqvS8'
+# Load the "Puntuaciones Concurso Social" spreadsheet
+# puntuaciones_sheet_id = '1T6xYNXFp7XwlrPZJKYbt4nWYM9hSxuEggqNuieyqvS8'
+puntuaciones_sheet_id = '1uehoM3-I3yEFTjgwDwiCkOwGRToKqJm57thwpK254uE'
 puntuaciones_client = gspread.authorize(credentials)
 puntuaciones_workbook = puntuaciones_client.open_by_key(puntuaciones_sheet_id)
-
 
 # Load the data from the first sheet into the "punctuations" variable
 #punctuations = puntuaciones_worksheet.get_all_records()
 
 # Load the "LISTADO DE PERSONAS_JGC" spreadsheet
-personas_sheet_id = '1Qh76H_10AyYTBqUahogQwdYk_wbAUIqKL0k4qEmaFck'
+# personas_sheet_id = '1Qh76H_10AyYTBqUahogQwdYk_wbAUIqKL0k4qEmaFck'
+# Load the "LISTADO ASOCIADOS PHOTOSAGRERA" spreadsheet
+personas_sheet_id ='1hBnQCLEetYFzR6QfI97DLGc1JZA9ZB39ZieDlhWMSwI'
 personas_client = gspread.authorize(credentials)
 personas_worksheet = personas_client.open_by_key(personas_sheet_id).sheet1
 
@@ -158,37 +171,43 @@ def create_month_sheet(month_name, num_rows):
     if new_worksheet_name in worksheet_list:
         puntuaciones_sheet = puntuaciones_workbook.worksheet(new_worksheet_name)
     else:
-        puntuaciones_sheet = puntuaciones_workbook.add_worksheet(new_worksheet_name, rows=num_rows, cols=7)
+        puntuaciones_sheet = puntuaciones_workbook.add_worksheet(new_worksheet_name, rows=num_rows, cols=4)
     puntuaciones_sheet.clear()
 
     return puntuaciones_sheet
 
 def format_month_sheet(sheet, num_rows):
     # Fill up the column headers row
-    column_headers = [["NUM.", "NOMBRE", "FICHERO JPG", "JURADO1", "JURADO2", "JURADO3", "TOTAL" ]]
-    sheet.update(column_headers, "A1:G1")
-    sheet.format("A1:G1", {"textFormat": {"bold": True}})
+    column_headers = [["NUM.", "NOMBRE", "FICHERO JPG", "TOTAL PUNTOS" ]]
+    sheet.update(column_headers, "A1:D1")
+    sheet.format("A1:D1", {"textFormat": {"bold": True}})
 
     # Set sum formula for the Total column(G) by updating selected range
-    cell_list = sheet.range(f"G2:G{num_rows}")
+    cell_list = sheet.range(f"D2:D{num_rows+1}")
     for i,cell in enumerate(cell_list):
-        cell.value = f"=sum(D{i+1}:F{i+1})"
-    sheet.update_cells(cell_list)
-
+        cell.value= '=SI.ERROR(SUMA(INDIRECTO("E" & FILA()); INDIRECTO("F" & FILA()); INDIRECTO("G" & FILA())  ); "")'
+    sheet.update_cells(cell_list, value_input_option='USER_ENTERED')
+ 
     # Format Header
-    sheetFormat.header_colors(sheet, "A1:G1")
+    sheetFormat.header_colors(sheet, "A1:D1")
    
     #Format the sheet rows with alternate colors
     start_row = 2
     end_row = num_rows + 1
-    column_range = "A:G"
+    column_range = "A:D"
    # sheetFormat.alternate_colors(sheet, start_row, end_row, column_range)
+
+    # Set column widths (width is measured in pixels)
+    set_column_width(sheet,'A', 50)  # NUM. column
+    set_column_width(sheet,'B', 300) # NOMBRE column
+    set_column_width(sheet,'C', 200) # FICHERO JPG column
+    set_column_width(sheet,'D', 150) # TOTAL PUNTOS column
 
 def match_author_names(file_correspondences, puntuaciones_sheet):
     personas = personas_worksheet.get_all_values()
 
-    # Create an array of author names by concatenating columns C and D
-    authors_list = [row[2] + ' ' + row[3] for row in personas[1:]]
+    # Create an array of author names by concatenating columns C and D exlcuding the header and first 4 rows
+    authors_list = [row[2] + ' ' + row[3] for row in personas[5:]]
 
 
     # Iterate over each row in "punctuations"
@@ -226,35 +245,18 @@ def match_author_names(file_correspondences, puntuaciones_sheet):
     return matched_names
 
 def get_command_line_arguments():
-    if len(sys.argv) >= 3:
-        sheet_tab_name = sys.argv[1]
-        folder_name = sys.argv[2]
+    if len(sys.argv) >= 2:
+         folder_name = sys.argv[1]
     else:
         # If not enough parameters are provided, ask the user
         if len(sys.argv) < 2:
-            sheet_tab_name = input("Entre el nombre de la hoja de resultados (Ex. GENER ): ")
-        else:
-            sheet_tab_name = sys.argv[1]
-
-        if len(sys.argv) < 3:
             folder_name = input("Entre el nombre de la subcarpeta de Hidrive bajo /SOCIALES/CARGA DE FOTOS/ con las fotos  (Ex. 05_GENER): ")
         else:
             folder_name = sys.argv[2]
+    sheet_tab_name = folder_name 
+        
 
     return sheet_tab_name, folder_name
-
-# Example usage
-CLIENT_ID = "9fe1b9ad74d3891f14e1270708c20780"
-CLIENT_SECRET = "6d350ec3781bb674ef0dabe1688a2060"
-REFRESH_TOKEN = "rt-znct5efv2boz6avorywgpsxwnu8w"
-
-#source_directory = "/users/photosagrera/SOCIALES/CARGA DE FOTOS/05_GENER"
-load_directory ="/users/photosagrera/SOCIALES/CARGA DE FOTOS/"
-destination_directory = "/users/photosagrera/SOCIALES/PENDIENTES DE FALLO/AL JURADO"
-
-
-
-
 
 
 def main():
