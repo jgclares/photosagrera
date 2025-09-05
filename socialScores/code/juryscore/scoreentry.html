@@ -59,7 +59,7 @@
         }
     </style>
 </head>
-<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center justify-center p-4">
+<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center p-4 pt-8">
 
     <div class="w-full max-w-4xl">
         <h1 class="text-4xl md:text-5xl font-extrabold text-center mb-8 gradient-text">
@@ -90,12 +90,12 @@
                 <p id="validation-message" class="text-red-500 mb-4 hidden font-medium text-sm">
                     Falten puntuacions en algunes fotos. Si us plau, revisa i completa la votació.
                 </p>
-                <button id="submit-button" class="bg-indigo-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:bg-indigo-700 transition duration-300 ease-in-out">
-                    Enviar Votació
-                </button>
                 <div id="loading-message" class="hidden mt-4 text-gray-400">Enviant votació...</div>
                 <div id="success-message" class="hidden mt-4 text-green-400">¡Votació enviada amb èxit!</div>
                 <div id="error-message" class="hidden mt-4 text-red-400">Error en enviar la votació. Intenta-ho de nou.</div>
+                <button id="submit-button" class="bg-indigo-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:bg-indigo-700 transition duration-300 ease-in-out">
+                    Enviar Votació
+                </button>
             </div>
         </div>
     </div>

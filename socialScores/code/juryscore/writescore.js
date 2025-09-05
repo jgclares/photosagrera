@@ -58,7 +58,7 @@ function doGet(e) {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(config.MES_ACTUAL);
     if (!sheet) {
       return ContentService.createTextOutput(JSON.stringify({
-        error: `No s'ha trobat el full per a les puntuacions del mes ${month}.`,
+        error: `No s'ha trobat el full per a les puntuacions del mes ${config.MES_ACTUAL}.`,
         status: "error"
       })).setMimeType(ContentService.MimeType.JSON);
     }
