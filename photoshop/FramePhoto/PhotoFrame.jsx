@@ -3,7 +3,10 @@
 var verticalDoc;
 var horizontalDoc;
 var userParams;
+const RESOLUTION = 300;
+var pixelsxcm = RESOLUTION / 2.54; // conversion factor pixels to cm
 
+// Function to load an image as a smart object layer, resize, position, add text, and save
 function loadImageAsimageLayer(sourceFile, savePath) {
     // Check if a document is open
     if (app.documents.length == 0) {
@@ -51,8 +54,8 @@ function loadImageAsimageLayer(sourceFile, savePath) {
     imageLayer.name = sourceFileDecoded;
 
     // Compute ratio of the image layer
-	var imageLayerWidth = (imageLayer.bounds[2] - imageLayer.bounds[0]).as("cm");
-	var imageLayerHeight = (imageLayer.bounds[3] - imageLayer.bounds[1]).as("cm");
+	var imageLayerWidth = imageLayer.bounds[2].as("cm") - imageLayer.bounds[0].as("cm");
+	var imageLayerHeight = imageLayer.bounds[3].as("cm") - imageLayer.bounds[1].as("cm");
     // alert("ImageLayerWidth =" + imageLayerWidth + " ImageLayerHeight="+ imageLayerHeight);
     var aspectRatio = imageLayerWidth / imageLayerHeight;
 
@@ -91,8 +94,8 @@ function loadImageAsimageLayer(sourceFile, savePath) {
     imageLayer.translate((3 - imageLayer.bounds[0].as("cm")), (4 - imageLayer.bounds[1].as("cm")));
 	
 	// New imagelayer size after scaling
-	var newImageLayerWidth = (imageLayer.bounds[2] - imageLayer.bounds[0]).as("cm");
-	var newImageLayerHeight = (imageLayer.bounds[3] - imageLayer.bounds[1]).as("cm");
+	var newImageLayerWidth = imageLayer.bounds[2].as("cm") - imageLayer.bounds[0].as("cm");
+	var newImageLayerHeight = imageLayer.bounds[3].as("cm") - imageLayer.bounds[1].as("cm");
 	
 	// if not wide enough center the image only horizontal axe
 	if (newImageLayerWidth + 0.05 < targetWidth) {
@@ -109,12 +112,15 @@ function loadImageAsimageLayer(sourceFile, savePath) {
     textItem.size = 14;
     textItem.font = "Verdana";
 	// Calculate layers Witdth and Height
-	var textLayerWidth = (textLayer.bounds[2] - textLayer.bounds[0]).as("cm");
-	var textLayerHeight = (textLayer.bounds[3] - textLayer.bounds[1]).as("cm");
+   	var newImageLayerWidthpx = imageLayer.bounds[2] - imageLayer.bounds[0];
+	var newImageLayerHeightpx = imageLayer.bounds[3] - imageLayer.bounds[1];
+	var textLayerWidthpx = textLayer.bounds[2] - textLayer.bounds[0];
+	var textLayerHeightpx = textLayer.bounds[3] - textLayer.bounds[1];
 	
 	// Text position
-	var x= (docWidth - newImageLayerWidth)/2 + newImageLayerWidth - textLayerWidth   // docWidth - 3 - textLayerWidth
-	var y= 4 + newImageLayerHeight + 2
+	var x= (doc.width - newImageLayerWidthpx)/2 + newImageLayerWidthpx - textLayerWidthpx   // docWidth - 3 - textLayerWidth
+	var y= (doc.height - newImageLayerHeightpx)/2 + newImageLayerHeightpx + 2 * pixelsxcm
+    
 	//alert("x =" +x + " y="+ y);
     textItem.position = [x, y]; // Align text to the bottom right of the image
  
@@ -197,7 +203,7 @@ function createTemplate(docName, pageWidth, pageHeight) {
     // Assign the passed parameters to the document dimensions
     var docWidth = pageWidth; // Width in cm
     var docHeight = pageHeight; // Height in cm
-    var docResolution = 300; // Resolution in DPI
+    var docResolution = RESOLUTION; // Resolution in DPI 300
     var docMode = NewDocumentMode.RGB; // Color mode
     var docDepth = BitsPerChannelType.EIGHT; // 8 bits/channel jgp required
     var docFill = DocumentFill.WHITE; // Fill with white
