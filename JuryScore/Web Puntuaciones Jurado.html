@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QÜESTIONARI DE PUNTUACIONS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Estilos personalizados para el gradiente del título */
+        .gradient-text {
+            background-image: linear-gradient(to right, #60a5fa, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Estilos para el contenedor de la cuadrícula en pantallas pequeñas */
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(14, 1fr); /* Ajuste para las nuevas 13 columnas de puntuación + la de foto */
+            gap: 0.5rem;
+        }
+        
+        @media (max-width: 640px) {
+            .grid-container {
+                grid-template-columns: 1fr; /* Columna única en móviles para mejor visualización */
+            }
+        }
+
+        /* Estilo para los botones de las celdas */
+        .cell-button {
+            height: 2.5rem;
+            width: 2.5rem;
+            border-radius: 1rem;
+            transition: all 0.2s ease-in-out;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+        }
+
+        /* Estilo para las celdas seleccionadas */
+        .cell-button.selected {
+            background-color: #6366f1; /* indigo-500 */
+            color: white;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            transform: scale(1.1);
+        }
+
+        /* Estilo para las celdas no seleccionadas */
+        .cell-button:not(.selected) {
+            background-color: #1f2937; /* gray-800 */
+            color: #9ca3af; /* gray-400 */
+        }
+
+        /* Estilo hover para las celdas no seleccionadas */
+        .cell-button:not(.selected):hover {
+            background-color: rgba(99, 102, 241, 0.2); /* indigo-700/20 */
+            color: #a5b4fc; /* indigo-400 */
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center justify-center p-4">
+
+    <div class="w-full max-w-4xl">
+        <h1 class="text-4xl md:text-5xl font-extrabold text-center mb-8 gradient-text">
+            Qüestionari de Puntuació
+        </h1>
+
+        <div id="jurado-name-section" class="flex flex-col items-center justify-center space-y-4">
+            <label for="jurado-name" class="text-xl font-medium text-gray-300">
+                Si us plau, introdueix el teu nom com a jurat:
+            </label>
+            <input type="text" id="jurado-name" placeholder="Nom del Jurat" class="w-full md:w-1/2 p-3 text-lg text-gray-900 bg-white rounded-xl shadow-md border-2 border-indigo-500 focus:outline-none focus:border-indigo-700">
+
+            <label for="num-photos" class="text-xl font-medium text-gray-300">
+                Introduce el número total de fotos del concurso:
+            </label>
+            <input type="number" id="num-photos" placeholder="Número de fotos" class="w-full md:w-1/2 p-3 text-lg text-gray-900 bg-white rounded-xl shadow-md border-2 border-indigo-500 focus:outline-none focus:border-indigo-700">
+
+            <button id="start-quiz-button" class="bg-indigo-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:bg-indigo-700 transition duration-300 ease-in-out">
+                Començar Votació
+            </button>
+        </div>
+
+        <div id="quiz-section" class="hidden">
+            <div class="overflow-x-auto" style="max-height: 80vh;">
+                <div class="inline-block min-w-full">
+                    <div id="quiz-header" class="sticky top-0 bg-gray-900 z-10"></div>
+                    <div id="quiz-grid"></div>
+                </div>
+            </div>
+
+            <div class="mt-8 text-center">
+                <p id="validation-message" class="text-red-500 mb-4 hidden font-medium text-sm">
+                    Falten puntuacions en algunes fotos. Si us plau, revisa i completa la votació.
+                </p>
+                <button id="submit-button" class="bg-indigo-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:bg-indigo-700 transition duration-300 ease-in-out">
+                    Enviar Votació
+                </button>
+                <div id="loading-message" class="hidden mt-4 text-gray-400">Enviant votació...</div>
+                <div id="success-message" class="hidden mt-4 text-green-400">¡Votació enviada amb èxit!</div>
+                <div id="error-message" class="hidden mt-4 text-red-400">Error en enviar la votació. Intenta-ho de nou.</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const juradoNameInput = document.getElementById('jurado-name');
+            const numPhotosInput = document.getElementById('num-photos');
+            const startQuizButton = document.getElementById('start-quiz-button');
+            const juradoNameSection = document.getElementById('jurado-name-section');
+            const quizSection = document.getElementById('quiz-section');
+            const quizGrid = document.getElementById('quiz-grid');
+            const quizHeader = document.getElementById('quiz-header');
+            const submitButton = document.getElementById('submit-button');
+            const validationMessage = document.getElementById('validation-message');
+            const loadingMessage = document.getElementById('loading-message');
+            const successMessage = document.getElementById('success-message');
+            const errorMessage = document.getElementById('error-message');
+
+            let numRows = 0;
+            const scores = [];
+            
+            // Lista de puntuaciones a usar
+            const scoreValues = [4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10];
+            
+            const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzweK3nVKXMpOBTUG-LyrYvB6RCPLd_CMgkDpaV-ulajRh1qPkKutMw4hxccSZQU93f/exec';
+
+            startQuizButton.addEventListener('click', () => {
+                const juradoName = juradoNameInput.value.trim();
+                const photosCount = parseInt(numPhotosInput.value);
+
+                if (!juradoName || isNaN(photosCount) || photosCount <= 0) {
+                    const nameError = document.createElement('p');
+                    nameError.textContent = 'Por favor, introduce un nombre y un número de fotos válido (> 0).';
+                    nameError.className = 'text-red-500 mt-2';
+                    juradoNameSection.appendChild(nameError);
+                    setTimeout(() => nameError.remove(), 3000);
+                    return;
+                }
+
+                numRows = photosCount;
+                scores.length = numRows;
+                scores.fill(null);
+
+                juradoNameSection.classList.add('hidden');
+                quizSection.classList.remove('hidden');
+                quizGrid.innerHTML = '';
+                generateQuizGrid();
+            });
+
+            const generateQuizGrid = () => {
+                // Genera la cabecera de la cuadrícula
+                const headerRow = document.createElement('div');
+                headerRow.className = 'grid-container mb-2 font-bold text-center';
+                headerRow.innerHTML = '<div class="h-10 w-20 flex items-center justify-center"></div>';
+                
+                scoreValues.forEach(score => {
+                    headerRow.innerHTML += `<div class="bg-gray-700 h-10 w-10 flex items-center justify-center text-sm rounded-full shadow-md">${score}</div>`;
+                });
+                
+                quizHeader.appendChild(headerRow);
+                
+                // Genera las filas del cuestionario
+                for (let i = 0; i < numRows; i++) {
+                    const row = document.createElement('div');
+                    row.className = 'grid-container mb-2 items-center';
+                    row.setAttribute('data-row-index', i);
+
+                    row.innerHTML = `<div class="bg-gray-700 h-10 w-20 flex items-center justify-center text-gray-300 font-bold text-sm rounded-2xl shadow-md">Foto ${i + 1}</div>`;
+
+                    scoreValues.forEach(score => {
+                        const cell = document.createElement('button');
+                        cell.className = 'cell-button text-sm';
+                        cell.setAttribute('data-score-value', score);
+                        cell.setAttribute('aria-label', `Seleccionar puntuació ${score} en la fila ${i + 1}`);
+                        cell.textContent = score;
+                        cell.addEventListener('click', handleCellClick);
+                        row.appendChild(cell);
+                    });
+                    quizGrid.appendChild(row);
+                }
+            };
+
+            const handleCellClick = (event) => {
+                const cell = event.currentTarget;
+                const row = cell.closest('.grid-container');
+                const rowIndex = parseInt(row.getAttribute('data-row-index'));
+                const scoreValue = parseFloat(cell.getAttribute('data-score-value'));
+                const isSelected = cell.classList.contains('selected');
+
+                row.querySelectorAll('.cell-button').forEach(c => {
+                    c.classList.remove('selected');
+                });
+
+                if (!isSelected) {
+                    cell.classList.add('selected');
+                    scores[rowIndex] = scoreValue;
+                } else {
+                    scores[rowIndex] = null;
+                }
+                
+                validationMessage.classList.add('hidden');
+            };
+
+            submitButton.addEventListener('click', () => {
+                const isComplete = scores.every(score => score !== null);
+
+                if (!isComplete) {
+                    validationMessage.classList.remove('hidden');
+                    return;
+                }
+
+                submitButton.disabled = true;
+                loadingMessage.classList.remove('hidden');
+                validationMessage.classList.add('hidden');
+                successMessage.classList.add('hidden');
+                errorMessage.classList.add('hidden');
+
+                const juradoName = juradoNameInput.value.trim();
+                const data = {
+                    juradoName: juradoName,
+                    scores: scores
+                };
+
+                fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    body: JSON.stringify(data),
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(() => {
+                    loadingMessage.classList.add('hidden');
+                    successMessage.classList.remove('hidden');
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    loadingMessage.classList.add('hidden');
+                    errorMessage.classList.remove('hidden');
+                    submitButton.disabled = false;
+                });
+            });
+        });
+    </script>
+</body>
+</html>
