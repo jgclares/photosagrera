@@ -119,8 +119,9 @@ function loadImageAsimageLayer(sourceFile, savePath) {
 	
 	// Text position
 	var x= (doc.width - newImageLayerWidth)/2 + newImageLayerWidth - textLayerWidth   // docWidth - 3 - textLayerWidth
-	var y= (doc.height - newImageLayerHeight)/2 + newImageLayerHeight + 2 
-    
+    var y=  imageLayer.bounds[1].as("cm") + newImageLayerHeight + 2 
+
+
 	//alert("x =" +x + " y="+ y);
     textItem.position = [x, y]; // Align text to the bottom right of the image
  
