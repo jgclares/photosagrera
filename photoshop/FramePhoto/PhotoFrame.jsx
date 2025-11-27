@@ -112,14 +112,14 @@ function loadImageAsimageLayer(sourceFile, savePath) {
     textItem.size = 14;
     textItem.font = "Verdana";
 	// Calculate layers Witdth and Height
-   	var newImageLayerWidthpx = imageLayer.bounds[2] - imageLayer.bounds[0];
-	var newImageLayerHeightpx = imageLayer.bounds[3] - imageLayer.bounds[1];
-	var textLayerWidthpx = textLayer.bounds[2] - textLayer.bounds[0];
-	var textLayerHeightpx = textLayer.bounds[3] - textLayer.bounds[1];
+   	var newImageLayerWidth = imageLayer.bounds[2].as("cm") - imageLayer.bounds[0].as("cm");
+	var newImageLayerHeight = imageLayer.bounds[3].as("cm") - imageLayer.bounds[1].as("cm");
+	var textLayerWidth = textLayer.bounds[2].as("cm") - textLayer.bounds[0].as("cm");
+	var textLayerHeightpx = textLayer.bounds[3].as("cm") - textLayer.bounds[1].as("cm");
 	
 	// Text position
-	var x= (doc.width - newImageLayerWidthpx)/2 + newImageLayerWidthpx - textLayerWidthpx   // docWidth - 3 - textLayerWidth
-	var y= (doc.height - newImageLayerHeightpx)/2 + newImageLayerHeightpx + 2 * pixelsxcm
+	var x= (doc.width - newImageLayerWidth)/2 + newImageLayerWidth - textLayerWidth   // docWidth - 3 - textLayerWidth
+	var y= (doc.height - newImageLayerHeight)/2 + newImageLayerHeight + 2 
     
 	//alert("x =" +x + " y="+ y);
     textItem.position = [x, y]; // Align text to the bottom right of the image
