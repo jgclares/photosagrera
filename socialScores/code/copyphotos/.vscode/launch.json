@@ -1,0 +1,41 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: prepareAgustiContest - All Steps",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/prepareAgustiContest.py",
+            "console": "integratedTerminal",
+            "args": ["all"],
+            "justMyCode": true
+        },
+        {
+            "name": "Python: prepareAgustiContest - Prepare (Steps 1-4)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/prepareAgustiContest.py",
+            "console": "integratedTerminal",
+            "args": ["prepare"],
+            "justMyCode": true
+        },
+        {
+            "name": "Python: prepareAgustiContest - Folders (Step 1-2)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/prepareAgustiContest.py",
+            "console": "integratedTerminal",
+            "args": ["folders"],
+            "justMyCode": true
+        },
+        {
+            "name": "Python: prepareAgustiContest - Download (Step 5-6)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/prepareAgustiContest.py",
+            "console": "integratedTerminal",
+            "args": ["download"],
+            "justMyCode": true
+        }
+    ]
+}
