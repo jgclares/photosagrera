@@ -200,6 +200,25 @@ class HiDriveAPI:
         else:
             response.raise_for_status()
 
+    def upload_file(self, file_handle, dest_path):
+        """Upload file to HiDrive with retry logic"""
+        def _upload():
+            url = f"{self.BASE_URL}/file"
+            params = {"path": dest_path}
+            headers = self.get_headers()
+            # Remove Content-Type from headers for multipart upload
+            headers.pop("Content-Type", None)
+            
+            response = requests.post(url, headers=headers, params=params, data=file_handle, timeout=60)
+            if response.status_code == 429 or response.status_code == 503:
+                raise RetryableException(f"HiDrive rate limit or temporarily unavailable: {response.status_code}")
+            response.raise_for_status()
+            return response.json()
+
+        result = retry_with_backoff(_upload, operation_name=f"upload_file({dest_path})")
+        logger.info(f"File uploaded: {dest_path}")
+        return result
+
 
 class GoogleDriveAPI:
     """Manages Google Drive file operations"""
@@ -522,11 +541,15 @@ def process_photos_and_number(gspread_client, hidrive_api, google_drive_api, des
 
 
 def _upload_file_to_hidrive(api, file_handle, dest_path):
-    """Helper to upload file to HiDrive (placeholder for actual implementation)"""
-    # Note: HiDrive API file upload implementation would go here
-    # For now, we assume files are already in HiDrive or use copy_file for already-uploaded files
-    logger.debug(f"Placeholder upload: {dest_path}")
-    pass
+    """Helper to upload file to HiDrive"""
+    try:
+        # Reset file handle to beginning in case it was read
+        file_handle.seek(0)
+        api.upload_file(file_handle, dest_path)
+        logger.info(f"Successfully uploaded file to: {dest_path}")
+    except Exception as e:
+        logger.error(f"Failed to upload file to {dest_path}: {str(e)}")
+        raise
 
 
 def get_command_line_arguments():
