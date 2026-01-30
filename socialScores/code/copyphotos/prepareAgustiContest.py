@@ -374,27 +374,49 @@ def setup_hidrive_folders(api):
 
 
 def sort_worksheet_by_column(worksheet, column_index):
-    """Sort worksheet by specified column (using Google Sheets API directly)"""
+    """Sort worksheet by specified column using Google Sheets API SortRangeRequest"""
     logger.info(f"Sorting worksheet by column {column_index} (random sort key)")
     
     try:
-        # Get all data
+        # Get all data to determine the range
         all_data = worksheet.get_all_values()
         if len(all_data) <= 1:
             logger.warning("No data to sort")
             return
 
-        # Extract header and data rows
-        header = all_data[0]
-        data_rows = all_data[1:]
+        num_rows = len(all_data)
+        num_cols = len(all_data[0])
 
-        # Sort by the random sort key column (index 8, column I)
-        sorted_rows = sorted(data_rows, key=lambda x: int(x[column_index]) if len(x) > column_index and x[column_index].isdigit() else 0)
+        # Define the range to sort (A1:I{num_rows}) - includes header
+        # Column index is 0-based, so column I (index 8) becomes column 9
+        sort_column_index = column_index + 1  # Convert 0-based to 1-based for API
 
-        # Clear and rewrite
-        worksheet.clear()
-        worksheet.insert_rows([header] + sorted_rows, 1)
-        logger.info(f"Worksheet sorted with {len(sorted_rows)} data rows")
+        # Create SortRangeRequest
+        requests_list = [
+            {
+                "sortRange": {
+                    "range": {
+                        "sheetId": worksheet.id,
+                        "startRowIndex": 0,  # Include header row
+                        "endRowIndex": num_rows,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": num_cols
+                    },
+                    "sortSpecs": [
+                        {
+                            "dimensionIndex": column_index,  # 0-based column index
+                            "sortOrder": "ASCENDING"
+                        }
+                    ]
+                }
+            }
+        ]
+
+        # Execute batch update
+        body = {"requests": requests_list}
+        worksheet.spreadsheet.batch_update(body)
+
+        logger.info(f"Worksheet sorted by column {column_index} (Random Sort Key) in-place via Google Sheets API")
 
     except Exception as e:
         logger.error(f"Error sorting worksheet: {str(e)}")
