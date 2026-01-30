@@ -251,31 +251,17 @@ def parse_google_drive_url(url):
     else:
         raise ValueError(f"Invalid Google Drive URL: {url}")
 
-
-def create_destination_spreadsheet(gspread_client, source_workbook, source_data):
-    """Create and populate 'Puntuaciones' sheet in source workbook from source data using batch operations"""
-    logger.info(f"Creating 'Puntuaciones' sheet in source workbook")
+def create_destination_rows_dataset(source_workbook, source_data):
+    """Create destination rows dataset from source data for 'Puntuaciones' sheet"""
+    logger.info(f"Creating destination rows dataset from source data for 'Puntuaciones' sheet")
     
     try:
-        # Check if 'Puntuaciones' sheet already exists and remove it
-        try:
-            puntuaciones_worksheet = source_workbook.worksheet(destination_sheet_name)
-            source_workbook.del_worksheet(puntuaciones_worksheet)
-            logger.info(f"Removed existing {destination_sheet_name} sheet")
-        except WorksheetNotFound:
-            pass
 
-        # Add new 'Puntuaciones' sheet
-        puntuaciones_worksheet = source_workbook.add_worksheet(title="Puntuaciones", rows=1, cols=9)
-        logger.info(f"Created new {destination_sheet_name} sheet")
-
-        # Add headers: A-G (original columns) + H (URL ID) + I (random sort key)
-        headers = ["Timestamp", "Name", "Email", "Phone", "Is Member", "Is Federated", "Federation ID", "Photo URL ID", "Random Sort Key"]
-        puntuaciones_worksheet.insert_row(headers, 1)
-        logger.info("Headers inserted")
+        # Add headers: A (Nº Foto) + B-I (original columns) + J (URL ID) + K (random sort key)
+        headers = ["Nº Foto", "Timestamp", "Name", "Email", "Phone", "Is Member", "Is Federated", "Federation ID", "Photo URL ID", "Random Sort Key"]
 
         # Build all rows from source data
-        all_rows = []
+        all_rows = [headers]
         for source_row in source_data[1:]:  # Skip header row
             if len(source_row) < 8:  # Ensure we have at least 8 columns
                 logger.warning(f"Skipping incomplete row: {source_row}")
@@ -294,7 +280,8 @@ def create_destination_spreadsheet(gspread_client, source_workbook, source_data)
             for url in urls:
                 try:
                     random_sort_key = random.randint(1, 1000000)
-                    new_row = source_row[:7] + [url, random_sort_key]
+                    # Add 0 as placeholder for Nº Foto at the beginning
+                    new_row = [0] + source_row[:7] + [url, random_sort_key]
                     all_rows.append(new_row)
                     logger.debug(f"Prepared row for URL: {url}")
                 except Exception as e:
@@ -303,41 +290,45 @@ def create_destination_spreadsheet(gspread_client, source_workbook, source_data)
 
         # Insert rows in batches using batchUpdate to reduce API quota usage
         logger.info(f"Inserting {len(all_rows)} photo rows in batches of {BATCH_INSERT_SIZE}")
+
+        return all_rows
+
+    except Exception as e:
+        logger.error(f"Error creating destination rows dataset: {str(e)} ")
+        raise
+
+
+
+def create_destination_spreadsheet(source_workbook, all_rows):
+    """Create and populate 'Puntuaciones' sheet in source workbook from source data using batch operations"""
+    logger.info(f"Creating 'Puntuaciones' sheet in source workbook")
+    
+    try:
+        # Check if 'Puntuaciones' sheet already exists and remove it
         try:
-            for batch_start in range(0, len(all_rows), BATCH_INSERT_SIZE):
-                batch_end = min(batch_start + BATCH_INSERT_SIZE, len(all_rows))
-                batch_rows = all_rows[batch_start:batch_end]
-                
-                # Use batchUpdate with AppendCellsRequest to insert rows efficiently
-                requests_list = []
-                
-                # Build rows for this batch (AppendCellsRequest format)
-                row_data = []
-                for row_values in batch_rows:
-                    cells = [{"userEnteredValue": {"stringValue": str(val)}} for val in row_values]
-                    row_data.append({"values": cells})
-                
-                # Create AppendCellsRequest
-                requests_list.append({
-                    "appendCells": {
-                        "sheetId": puntuaciones_worksheet.id,
-                        "rows": row_data,
-                        "fields": "userEnteredValue"
-                    }
-                })
-                
-                # Execute batch update
-                body = {"requests": requests_list}
-                puntuaciones_worksheet.spreadsheet.batch_update(body)
-                
-                logger.info(f"Inserted batch {batch_start // BATCH_INSERT_SIZE + 1}: rows {batch_start + 2} to {batch_end + 1}")
+            puntuaciones_worksheet = source_workbook.worksheet(destination_sheet_name)
+            source_workbook.del_worksheet(puntuaciones_worksheet)
+            logger.info(f"Removed existing {destination_sheet_name} sheet")
+        except WorksheetNotFound:
+            pass
+
+        # Add new 'Puntuaciones' sheet
+        puntuaciones_worksheet = source_workbook.add_worksheet(title="Puntuaciones", rows=1, cols=10)
+        logger.info(f"Created new {destination_sheet_name} sheet")
+
+        # Insert all_ rows 
+        logger.info(f"Inserting {len(all_rows)} photo rows ")
+        try:
+            # Clear and rewrite
+            puntuaciones_worksheet.clear()
+            puntuaciones_worksheet.insert_rows(all_rows, 1)
 
         except Exception as e:
-            logger.error(f"Error inserting rows in batches: {str(e)}")
+            logger.error(f"Error inserting rows to 'Puntuaciones' sheet: {str(e)}")
             raise
 
         logger.info(f"{destination_sheet_name} sheet created with {len(all_rows)} photo rows")
-        return source_workbook, puntuaciones_worksheet
+        return  puntuaciones_worksheet
 
     except Exception as e:
         logger.error(f"Error creating '{destination_sheet_name}' sheet: {str(e)}")
@@ -373,53 +364,35 @@ def setup_hidrive_folders(api):
         raise
 
 
-def sort_worksheet_by_column(worksheet, column_index):
-    """Sort worksheet by specified column using Google Sheets API SortRangeRequest"""
-    logger.info(f"Sorting worksheet by column {column_index} (random sort key)")
+def sort_worksheet_by_column(all_data, column_index):
+    """Sort dataset by specified column"""
+    logger.info(f"Sorting dataset by column {column_index} (random sort key)")
     
     try:
-        # Get all data to determine the range
-        all_data = worksheet.get_all_values()
-        if len(all_data) <= 1:
-            logger.warning("No data to sort")
-            return
-
-        num_rows = len(all_data)
-        num_cols = len(all_data[0])
-
-        # Define the range to sort (A1:I{num_rows}) - includes header
-        # Column index is 0-based, so column I (index 8) becomes column 9
-        sort_column_index = column_index + 1  # Convert 0-based to 1-based for API
-
-        # Create SortRangeRequest
-        requests_list = [
-            {
-                "sortRange": {
-                    "range": {
-                        "sheetId": worksheet.id,
-                        "startRowIndex": 0,  # Include header row
-                        "endRowIndex": num_rows,
-                        "startColumnIndex": 0,
-                        "endColumnIndex": num_cols
-                    },
-                    "sortSpecs": [
-                        {
-                            "dimensionIndex": column_index,  # 0-based column index
-                            "sortOrder": "ASCENDING"
-                        }
-                    ]
-                }
-            }
-        ]
-
-        # Execute batch update
-        body = {"requests": requests_list}
-        worksheet.spreadsheet.batch_update(body)
-
-        logger.info(f"Worksheet sorted by column {column_index} (Random Sort Key) in-place via Google Sheets API")
+        header = all_data[0]
+        data_rows = all_data[1:]
+        sorted_rows = sorted(data_rows, key=lambda x: int(x[column_index]) if len(x) > column_index and x[column_index].isdigit() else 0)
+        logger.info(f"Destination dataset of {len(sorted_rows)} rows sorted")
+        return [header] + sorted_rows  # Return flat list, not nested
 
     except Exception as e:
-        logger.error(f"Error sorting worksheet: {str(e)}")
+        logger.error(f"Error sorting destination dataset: {str(e)}")
+        raise
+
+def number_photos(all_rows):
+    """Assign sequential photo numbers to each row in dataset"""
+    logger.info("Numbering photos in dataset")
+    
+    try:
+        photo_number = 0
+        for row in all_rows[1:]:  # Skip header
+            photo_number += 1
+            row[0] = f"{photo_number:03d}"  # Update 'Nº foto' column (index 0)
+        logger.info(f"Assigned photo numbers up to {photo_number}")
+        return all_rows
+
+    except Exception as e:
+        logger.error(f"Error numbering photos: {str(e)}")
         raise
 
 
@@ -590,31 +563,33 @@ def main():
             source_data = source_worksheet.get_all_values()
             logger.info(f"Read {len(source_data) - 1} rows from source spreadsheet")
 
-            # Create 'Puntuaciones' sheet in source workbook
-            dest_workbook, dest_worksheet = create_destination_spreadsheet(gspread_client, source_workbook, source_data)
 
-        # Step 1-2: Setup HiDrive folder structure
+        
+        # Step 3: Sort by random column
+        if action in ["prepare", "all"]:
+            logger.info("=" * 60)
+            logger.info("STEP 3: Sorting by random column")
+            logger.info("=" * 60)
+            # Create rows dataset for 'Puntuaciones' sheet in source workbook
+            all_rows = create_destination_rows_dataset(source_workbook, source_data)
+
+            # Sort dataset by random sort key column (index 9, column J)
+            sorted_rows = sort_worksheet_by_column(all_rows, 9)  # Flat list: [header, row1, row2, ...]
+
+            # Number photos sequentially in sorted order
+            numbered_rows = number_photos(sorted_rows)  # Modifies in-place, returns reference
+
+            # Create 'Puntuaciones' sheet in source workbook
+            dest_worksheet = create_destination_spreadsheet(source_workbook, numbered_rows)  
+
+        #  Setup HiDrive folder structure
         if action in ["folders", "all"]:
             logger.info("=" * 60)
             logger.info("STEP 1-2: Setting up HiDrive folders")
             logger.info("=" * 60)
             setup_hidrive_folders(hidrive_api)
 
-        # Step 3: Sort by random column
-        if action in ["prepare", "all"]:
-            logger.info("=" * 60)
-            logger.info("STEP 3: Sorting by random column")
-            logger.info("=" * 60)
-            sort_worksheet_by_column(dest_worksheet, 8)  # Column I (0-indexed)
-
-        # Step 4: Insert photo number column
-        if action in ["prepare", "all"]:
-            logger.info("=" * 60)
-            logger.info("STEP 4: Inserting photo number column")
-            logger.info("=" * 60)
-            insert_photo_number_column(dest_worksheet)
-
-        # Step 5-6: Process photos
+        # Download photos to MyHidrive 
         if action in ["download", "all"]:
             logger.info("=" * 60)
             logger.info("STEP 5-6: Processing photos")
