@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 MINIMUM_SIMILARITY = 0.6
 MAX_RETRIES = 3
 BASE_RETRY_DELAY = 1
+BATCH_INSERT_SIZE = 50  # Rows per batch insert (50 rows ≈ 1 request vs 50 individual requests)
 
 # Google Sheets API credentials
 scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -252,7 +253,7 @@ def parse_google_drive_url(url):
 
 
 def create_destination_spreadsheet(gspread_client, source_workbook, source_data):
-    """Create and populate 'Puntuaciones' sheet in source workbook from source data"""
+    """Create and populate 'Puntuaciones' sheet in source workbook from source data using batch operations"""
     logger.info(f"Creating 'Puntuaciones' sheet in source workbook")
     
     try:
@@ -273,8 +274,8 @@ def create_destination_spreadsheet(gspread_client, source_workbook, source_data)
         puntuaciones_worksheet.insert_row(headers, 1)
         logger.info("Headers inserted")
 
-        # Process each row from source data and expand by number of photos
-        row_index = 2
+        # Build all rows from source data
+        all_rows = []
         for source_row in source_data[1:]:  # Skip header row
             if len(source_row) < 8:  # Ensure we have at least 8 columns
                 logger.warning(f"Skipping incomplete row: {source_row}")
@@ -294,14 +295,48 @@ def create_destination_spreadsheet(gspread_client, source_workbook, source_data)
                 try:
                     random_sort_key = random.randint(1, 1000000)
                     new_row = source_row[:7] + [url, random_sort_key]
-                    puntuaciones_worksheet.insert_row(new_row, row_index)
-                    row_index += 1
-                    logger.debug(f"Inserted row {row_index - 1} for URL: {url}")
+                    all_rows.append(new_row)
+                    logger.debug(f"Prepared row for URL: {url}")
                 except Exception as e:
-                    logger.error(f"Error inserting row for URL {url}: {str(e)}")
+                    logger.error(f"Error preparing row for URL {url}: {str(e)}")
                     raise
 
-        logger.info(f"{destination_sheet_name} sheet created with {row_index - 2} photo rows")
+        # Insert rows in batches using batchUpdate to reduce API quota usage
+        logger.info(f"Inserting {len(all_rows)} photo rows in batches of {BATCH_INSERT_SIZE}")
+        try:
+            for batch_start in range(0, len(all_rows), BATCH_INSERT_SIZE):
+                batch_end = min(batch_start + BATCH_INSERT_SIZE, len(all_rows))
+                batch_rows = all_rows[batch_start:batch_end]
+                
+                # Use batchUpdate with AppendCellsRequest to insert rows efficiently
+                requests_list = []
+                
+                # Build rows for this batch (AppendCellsRequest format)
+                row_data = []
+                for row_values in batch_rows:
+                    cells = [{"userEnteredValue": {"stringValue": str(val)}} for val in row_values]
+                    row_data.append({"values": cells})
+                
+                # Create AppendCellsRequest
+                requests_list.append({
+                    "appendCells": {
+                        "sheetId": puntuaciones_worksheet.id,
+                        "rows": row_data,
+                        "fields": "userEnteredValue"
+                    }
+                })
+                
+                # Execute batch update
+                body = {"requests": requests_list}
+                puntuaciones_worksheet.spreadsheet.batch_update(body)
+                
+                logger.info(f"Inserted batch {batch_start // BATCH_INSERT_SIZE + 1}: rows {batch_start + 2} to {batch_end + 1}")
+
+        except Exception as e:
+            logger.error(f"Error inserting rows in batches: {str(e)}")
+            raise
+
+        logger.info(f"{destination_sheet_name} sheet created with {len(all_rows)} photo rows")
         return source_workbook, puntuaciones_worksheet
 
     except Exception as e:
@@ -405,7 +440,7 @@ def process_photos_and_number(gspread_client, hidrive_api, google_drive_api, des
             try:
                 # Column H contains the URL (after inserting photo number column, it's now column I)
                 # Column I contains random sort key (now column J)
-                url = row[7] if len(row) > 7 else None
+                url = row[8] if len(row) > 8 else None
                 
                 if not url or not url.strip():
                     logger.warning(f"Row {row_index} has no URL, skipping")
@@ -565,7 +600,7 @@ def main():
             
             # Re-fetch destination worksheet if needed
             if action == "download":
-                dest_workbook = gspread_client.open(destination_sheet_name)
+                dest_workbook = gspread_client.open_by_key(source_sheet_id)
                 dest_worksheet = dest_workbook.worksheet(destination_sheet_name)    
 
             photo_count = process_photos_and_number(gspread_client, hidrive_api, google_drive_api, dest_worksheet)
