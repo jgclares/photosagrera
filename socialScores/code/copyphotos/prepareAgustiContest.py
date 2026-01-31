@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 MINIMUM_SIMILARITY = 0.6
 MAX_RETRIES = 3
 BASE_RETRY_DELAY = 1
-BATCH_INSERT_SIZE = 50  # Rows per batch insert (50 rows ≈ 1 request vs 50 individual requests)
+
 
 # Google Sheets API credentials
 scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -33,9 +33,9 @@ credentials = Credentials.from_service_account_file("credentials.json", scopes=s
 # Source spreadsheet (from Google Forms)
 folder_path = "Mi Unidad > CONCURSO 2026 > AGUSTI UMBERT TEMA LIBRE 2026"
 source_sheet_id = '1yb0m44PtxLNhTJCQ46bRM4XqaL2SGHQy6XJA0JBChlU'
-source_sheet_name = "Inscripciones"
-destination_sheet_name = "Puntuaciones"
-folder_path = "Mi Unidad > CONCURSO 2026 > AGUSTI UMBERT TEMA LIBRE 2026"
+source_sheet_name = "Inscripciones"           # the worksheet with the form responses from Google Forms
+destination_sheet_name = "Puntuaciones"       # the worksheet to be created with the photo entries
+folder_path = "Mi Unidad > CONCURSO 2026 > AGUSTI UMBERT TEMA LIBRE 2026" # Only for reference
 
 # HiDrive API credentials
 CLIENT_ID = "9fe1b9ad74d3891f14e1270708c20780"
@@ -307,7 +307,7 @@ def create_destination_rows_dataset(source_workbook, source_data):
                     raise
 
         # Insert rows in batches using batchUpdate to reduce API quota usage
-        logger.info(f"Inserting {len(all_rows)} photo rows in batches of {BATCH_INSERT_SIZE}")
+        logger.info(f" {len(all_rows)} photo rows generated from the source data")
 
         return all_rows
 
@@ -529,7 +529,7 @@ def _upload_file_to_hidrive(api, file_handle, dest_path):
         # Reset file handle to beginning in case it was read
         file_handle.seek(0)
         api.upload_file(file_handle, dest_path)
-        logger.info(f"Successfully uploaded file to: {dest_path}")
+        # logger.info(f"Successfully uploaded file to: {dest_path}")
     except Exception as e:
         logger.error(f"Failed to upload file to {dest_path}: {str(e)}")
         raise
