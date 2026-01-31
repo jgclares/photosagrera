@@ -100,13 +100,13 @@ class HiDriveAPI:
 
         retry_with_backoff(_refresh, operation_name="refresh_access_token")
 
-    def get_headers(self):
+    def get_headers(self, content_type="application/json"):
         """Get authorization headers, refreshing token if needed"""
         if time.time() > self.token_expiry:
             self.refresh_access_token()
         return {
             "Authorization": f"Bearer {self.access_token}",
-            "Content-Type": "application/json"
+            "Content-Type": content_type
         }
 
     def list_files(self, directory):
@@ -204,10 +204,9 @@ class HiDriveAPI:
         """Upload file to HiDrive with retry logic"""
         def _upload():
             url = f"{self.BASE_URL}/file"
-            params = {"path": dest_path}
-            headers = self.get_headers()
-            # Remove Content-Type from headers for multipart upload
-            headers.pop("Content-Type", None)
+            params = {"dir": os.path.dirname(dest_path),
+                      "name": os.path.basename(dest_path)}
+            headers = self.get_headers(content_type="image/gif")  #content_type="application/octet-stream"
             
             response = requests.post(url, headers=headers, params=params, data=file_handle, timeout=60)
             if response.status_code == 429 or response.status_code == 503:
@@ -338,8 +337,8 @@ def create_destination_spreadsheet(source_workbook, all_rows):
         # Insert all_ rows 
         logger.info(f"Inserting {len(all_rows)} photo rows ")
         try:
-            # Clear and rewrite
-            puntuaciones_worksheet.clear()
+            # Insert all rows at once
+            # puntuaciones_worksheet.clear()
             puntuaciones_worksheet.insert_rows(all_rows, 1)
 
         except Exception as e:
@@ -390,7 +389,7 @@ def sort_worksheet_by_column(all_data, column_index):
     try:
         header = all_data[0]
         data_rows = all_data[1:]
-        sorted_rows = sorted(data_rows, key=lambda x: int(x[column_index]) if len(x) > column_index and x[column_index].isdigit() else 0)
+        sorted_rows = sorted(data_rows, key=lambda x: int(x[column_index]))
         logger.info(f"Destination dataset of {len(sorted_rows)} rows sorted")
         return [header] + sorted_rows  # Return flat list, not nested
 
@@ -406,7 +405,7 @@ def number_photos(all_rows):
         photo_number = 0
         for row in all_rows[1:]:  # Skip header
             photo_number += 1
-            row[0] = f"{photo_number:03d}"  # Update 'Nº foto' column (index 0)
+            row[0] = f"{photo_number:04d}"  # Update 'Nº foto' column (index 0)
         logger.info(f"Assigned photo numbers up to {photo_number}")
         return all_rows
 
@@ -499,7 +498,7 @@ def process_photos_and_number(gspread_client, hidrive_api, google_drive_api, des
                 photo_number += 1
 
                 # Create numbered filename for Numeradas folder
-                numbered_filename = f"{photo_number:03d}{file_ext}"
+                numbered_filename = f"{row[0]}{file_ext}"
                 
                 # Reset file handle and copy to Numeradas folder
                 try:
@@ -511,27 +510,11 @@ def process_photos_and_number(gspread_client, hidrive_api, google_drive_api, des
                     logger.error(f"Row {row_index}: Failed to upload to Numeradas: {str(e)}")
                     continue
 
-                # Update column A with photo number
-                try:
-                    cell_value = f"{photo_number:03d}"
-                    cells_to_update.append((row_index, 1, cell_value))  # Column A (1-indexed)
-                except Exception as e:
-                    logger.error(f"Row {row_index}: Error preparing cell update: {str(e)}")
-
             except Exception as e:
                 logger.error(f"Row {row_index}: Unexpected error: {str(e)}")
                 continue
 
-        # Batch update cells with photo numbers
-        if cells_to_update:
-            try:
-                for row_idx, col_idx, value in cells_to_update:
-                    dest_worksheet.update_cell(row_idx, col_idx, value)
-                logger.info(f"Updated {len(cells_to_update)} cells with photo numbers")
-            except Exception as e:
-                logger.error(f"Error batch updating cells: {str(e)}")
-                raise
-
+        
         logger.info(f"Photo processing complete: {photo_number} photos processed")
         return photo_number
 
