@@ -269,14 +269,40 @@ def parse_google_drive_url(url):
     else:
         raise ValueError(f"Invalid Google Drive URL: {url}")
 
-def create_destination_rows_dataset(source_workbook, source_data):
+def get_filename_from_google_drive_url(google_drive_api, url):
+    """Extract filename from Google Drive URL by fetching file metadata
+    
+    Args:
+        google_drive_api: GoogleDriveAPI instance
+        url: Google Drive URL or file ID
+        
+    Returns:
+        filename: The name of the file from Google Drive metadata
+        
+    Raises:
+        ValueError: If URL is invalid or file metadata cannot be retrieved
+    """
+    try:
+        file_id = parse_google_drive_url(url)
+        file_metadata = google_drive_api.get_file_metadata(file_id)
+        filename = file_metadata['name']
+        logger.debug(f"Retrieved filename from Google Drive: {filename}")
+        return filename
+    except ValueError as e:
+        logger.error(f"Invalid Google Drive URL: {str(e)}")
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get filename from URL {url}: {str(e.message)}")
+        raise
+
+
+def create_destination_rows_dataset(source_workbook, source_data, google_drive_api):
     """Create destination rows dataset from source data for 'Puntuaciones' sheet"""
     logger.info(f"Creating destination rows dataset from source data for 'Puntuaciones' sheet")
     
     try:
-
-        # Add headers: A (Nº Foto) + B-I (original columns) + J (URL ID) + K (random sort key)
-        headers = ["Nº Foto", "Timestamp", "Name", "Email", "Phone", "Is Member", "Is Federated", "Federation ID", "Photo URL ID", "Random Sort Key"]
+        # Add headers: A (Nº Foto) + B (Filename) + C-J (original columns) + K (URL ID) + L (random sort key)
+        headers = ["Nº Foto", "Filename", "Timestamp", "Name", "Email", "Phone", "Is Member", "Is Federated", "Federation ID", "Photo URL ID", "Random Sort Key"]
 
         # Build all rows from source data
         all_rows = [headers]
@@ -297,22 +323,28 @@ def create_destination_rows_dataset(source_workbook, source_data):
             # For each URL, create a new row
             for url in urls:
                 try:
+                    # Get filename from Google Drive
+                    try:
+                        filename = get_filename_from_google_drive_url(google_drive_api, url)
+                    except Exception as e:
+                        #logger.warning(f"Failed to retrieve filename for URL {url}: {str(e)}, using empty string")
+                        filename = ""
+
                     random_sort_key = random.randint(1, 1000000)
-                    # Add 0 as placeholder for Nº Foto at the beginning
-                    new_row = [0] + source_row[:7] + [url, random_sort_key]
+                    # Add 0 as placeholder for Nº Foto at the beginning, plus Filename as second column
+                    new_row = [0, filename] + source_row[:7] + [url, random_sort_key]
                     all_rows.append(new_row)
-                    logger.debug(f"Prepared row for URL: {url}")
+                    logger.debug(f"Prepared row for URL: {url}, Filename: {filename}")
                 except Exception as e:
                     logger.error(f"Error preparing row for URL {url}: {str(e)}")
-                    raise
+                    continue
 
-        # Insert rows in batches using batchUpdate to reduce API quota usage
-        logger.info(f" {len(all_rows)} photo rows generated from the source data")
+        logger.info(f"{len(all_rows) - 1} photo rows generated from the source data")
 
         return all_rows
 
     except Exception as e:
-        logger.error(f"Error creating destination rows dataset: {str(e)} ")
+        logger.error(f"Error creating destination rows dataset: {str(e)}")
         raise
 
 
@@ -330,15 +362,13 @@ def create_destination_spreadsheet(source_workbook, all_rows):
         except WorksheetNotFound:
             pass
 
-        # Add new 'Puntuaciones' sheet
-        puntuaciones_worksheet = source_workbook.add_worksheet(title="Puntuaciones", rows=1, cols=10)
+        # Add new 'Puntuaciones' sheet with 11 columns (Nº Foto + Filename + 9 original columns)
+        puntuaciones_worksheet = source_workbook.add_worksheet(title="Puntuaciones", rows=1, cols=11)
         logger.info(f"Created new {destination_sheet_name} sheet")
 
-        # Insert all_ rows 
+        # Insert all rows 
         logger.info(f"Inserting {len(all_rows)} photo rows ")
         try:
-            # Insert all rows at once
-            # puntuaciones_worksheet.clear()
             puntuaciones_worksheet.insert_rows(all_rows, 1)
 
         except Exception as e:
@@ -440,56 +470,48 @@ def insert_photo_number_column(worksheet):
         raise
 
 
-def process_photos_and_number(gspread_client, hidrive_api, google_drive_api, dest_worksheet):
+def upload_photos_to_Hidrive(gspread_client, hidrive_api, google_drive_api, dest_worksheet):
     """Download photos, copy to HiDrive, and update spreadsheet with photo numbers"""
     logger.info("Processing photos and assigning numbers")
     
     try:
         all_data = dest_worksheet.get_all_values()
         photo_number = 0
-        cells_to_update = []
 
         for row_index, row in enumerate(all_data[1:], start=2):  # Skip header
             try:
-                # Column H contains the URL (after inserting photo number column, it's now column I)
-                # Column I contains random sort key (now column J)
-                url = row[8] if len(row) > 8 else None
+                # Column K contains the URL (after adding Filename column, it's now at index 9)
+                # Column L contains random sort key (now at index 10)
+                url = row[9] if len(row) > 9 else None
                 
                 if not url or not url.strip():
                     logger.warning(f"Row {row_index} has no URL, skipping")
                     continue
 
-                # Parse Google Drive URL and get file ID
+                # Get filename from Google Drive using helper function
                 try:
-                    file_id = parse_google_drive_url(url)
-                except ValueError as e:
-                    logger.error(f"Row {row_index}: {str(e)}")
-                    continue
-
-                # Get file metadata
-                try:
-                    file_metadata = google_drive_api.get_file_metadata(file_id)
-                    filename = file_metadata['name']
+                    filename = get_filename_from_google_drive_url(google_drive_api, url)
                 except Exception as e:
-                    logger.error(f"Row {row_index}: Failed to get metadata for {file_id}: {str(e)}")
-                    continue
+                    logger.warning(f"Row {row_index}: Failed to get filename: {str(e)}, using existing value")
+                    filename = row[1] if len(row) > 1 else ""
 
                 # Download file
                 try:
+                    file_id = parse_google_drive_url(url)
                     file_handle = google_drive_api.download_file(file_id)
                 except Exception as e:
-                    logger.error(f"Row {row_index}: Failed to download file {file_id}: {str(e)}")
+                    logger.error(f"Row {row_index}: Failed to download file from URL {url}: {str(e)}")
                     continue
 
                 # Get file extension
                 file_ext = os.path.splitext(filename)[1]
+                original_numbered_filename = f"{row[0]}-{filename}"
 
                 # Copy to Originales folder (use original filename)
                 try:
-                    dest_path_original = f"{HIDRIVE_ORIGINALS_PATH}/{filename}"
-                    # Use HiDrive file upload API
+                    dest_path_original = f"{HIDRIVE_ORIGINALS_PATH}/{original_numbered_filename}"
                     _upload_file_to_hidrive(hidrive_api, file_handle, dest_path_original)
-                    logger.debug(f"Row {row_index}: Uploaded to Originales: {filename}")
+                    logger.debug(f"Row {row_index}: Uploaded to Originales: {original_numbered_filename}")
                 except Exception as e:
                     logger.error(f"Row {row_index}: Failed to upload to Originales: {str(e)}")
                     continue
@@ -514,7 +536,6 @@ def process_photos_and_number(gspread_client, hidrive_api, google_drive_api, des
                 logger.error(f"Row {row_index}: Unexpected error: {str(e)}")
                 continue
 
-        
         logger.info(f"Photo processing complete: {photo_number} photos processed")
         return photo_number
 
@@ -557,7 +578,7 @@ def main():
 
         logger.info(f"Starting prepareAgustiContest with action: {action}")
 
-        # Step 1-3: Create destination spreadsheet from source data
+        # Create destination spreadsheet from source data
         if action in ["prepare", "all"]:
             logger.info("=" * 60)
             logger.info("STEP 1-3: Creating destination spreadsheet")
@@ -571,16 +592,16 @@ def main():
 
 
         
-        # Step 3: Sort by random column
+        #  Enhance data and sort by random column to create destination sheet
         if action in ["prepare", "all"]:
             logger.info("=" * 60)
-            logger.info("STEP 3: Sorting by random column")
+            logger.info("Creating destination sheet with extra columns and sorting by random column")
             logger.info("=" * 60)
             # Create rows dataset for 'Puntuaciones' sheet in source workbook
-            all_rows = create_destination_rows_dataset(source_workbook, source_data)
+            all_rows = create_destination_rows_dataset(source_workbook, source_data, google_drive_api)
 
-            # Sort dataset by random sort key column (index 9, column J)
-            sorted_rows = sort_worksheet_by_column(all_rows, 9)  # Flat list: [header, row1, row2, ...]
+            # Sort dataset by random sort key column (index 10, column K)
+            sorted_rows = sort_worksheet_by_column(all_rows, 10)  # Flat list: [header, row1, row2, ...]
 
             # Number photos sequentially in sorted order
             numbered_rows = number_photos(sorted_rows)  # Modifies in-place, returns reference
@@ -588,25 +609,25 @@ def main():
             # Create 'Puntuaciones' sheet in source workbook
             dest_worksheet = create_destination_spreadsheet(source_workbook, numbered_rows)  
 
-        #  Setup HiDrive folder structure
+        #  Create folder structure in HiDrive
         if action in ["folders", "all"]:
             logger.info("=" * 60)
-            logger.info("STEP 1-2: Setting up HiDrive folders")
+            logger.info("Setting up HiDrive folders")
             logger.info("=" * 60)
             setup_hidrive_folders(hidrive_api)
 
         # Download photos to MyHidrive 
-        if action in ["download", "all"]:
+        if action in ["upload", "all"]:
             logger.info("=" * 60)
-            logger.info("STEP 5-6: Processing photos")
+            logger.info("Uploading photos to HiDrive")
             logger.info("=" * 60)
             
             # Re-fetch destination worksheet if needed
-            if action == "download":
+            if action == "upload":
                 dest_workbook = gspread_client.open_by_key(source_sheet_id)
                 dest_worksheet = dest_workbook.worksheet(destination_sheet_name)    
 
-            photo_count = process_photos_and_number(gspread_client, hidrive_api, google_drive_api, dest_worksheet)
+            photo_count = upload_photos_to_Hidrive(gspread_client, hidrive_api, google_drive_api, dest_worksheet)
             logger.info(f"Successfully processed {photo_count} photos")
 
         logger.info("=" * 60)
