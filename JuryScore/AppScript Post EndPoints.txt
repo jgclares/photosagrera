@@ -1,4 +1,5 @@
 App Script
+Ejecutar App Script de la hoja excel invocandolo con curl
 
 URL Web
 https://script.google.com/macros/s/AKfycbwRmuQSBaDbADgBNFTosfDEE8BPRp4Vc-at3OBgH7bw8jsCMgzlHUhyc1jVfz6H229F/exec
