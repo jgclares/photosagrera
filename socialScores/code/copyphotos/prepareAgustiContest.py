@@ -25,28 +25,52 @@ MINIMUM_SIMILARITY = 0.6
 MAX_RETRIES = 3
 BASE_RETRY_DELAY = 1
 
-
-# Google Sheets API credentials
-scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-credentials = Credentials.from_service_account_file("credentials.json", scopes=scopes)
-
-# Source spreadsheet (from Google Forms)
-folder_path = "Mi Unidad > CONCURSO 2026 > AGUSTI UMBERT TEMA LIBRE 2026"
-source_sheet_id = '1yb0m44PtxLNhTJCQ46bRM4XqaL2SGHQy6XJA0JBChlU'
-source_sheet_name = "Inscripciones"           # the worksheet with the form responses from Google Forms
-destination_sheet_name = "Puntuaciones"       # the worksheet to be created with the photo entries
-folder_path = "Mi Unidad > CONCURSO 2026 > AGUSTI UMBERT TEMA LIBRE 2026" # Only for reference
-
 # HiDrive API credentials
 CLIENT_ID = "9fe1b9ad74d3891f14e1270708c20780"
 CLIENT_SECRET = "6d350ec3781bb674ef0dabe1688a2060"
 REFRESH_TOKEN = "rt-znct5efv2boz6avorywgpsxwnu8w"
 
-# HiDrive paths
-HIDRIVE_BASE_PATH = "/users/photosagrera/PREMI AGUSTI UMBERT/Concurso 2026"
-HIDRIVE_ORIGINALS_PATH = f"{HIDRIVE_BASE_PATH}/Originales"
-HIDRIVE_NUMBERED_PATH = f"{HIDRIVE_BASE_PATH}/Numeradas"
+# Source spreadsheet (from Google Forms) Agustí Umbert
+folder_path = "Mi Unidad > CONCURSO 2026 > AGUSTI UMBERT TEMA LIBRE"
+aumbert_source_sheet_id = '1yb0m44PtxLNhTJCQ46bRM4XqaL2SGHQy6XJA0JBChlU'
+aumbert_headers = ["Nº Foto", "Filename", "Timestamp", "Name", "Email", "Phone", "Is Member", "Is Federated", "Federation ID", "Photo URL ID", "Random Sort Key"]
+aumbert_numcols = 8
+aumbert_base_path = "/users/photosagrera/PREMI AGUSTI UMBERT/Concurso 2026"
+aumbert_originals_path = f"{aumbert_base_path}/Originales"
+aumbert_numbered_path = f"{aumbert_base_path}/Numeradas"
 
+# Source spreadsheet (from Google Forms) Cartel Festa Major La Sagrera  
+folder_path = "Mi Unidad > CONCURSO 2026 > CARTEL FESTA MAJOR"
+cartel_source_sheet_id = '1cjnmoPTwAvlL_NY44d-wT6wC2ev6r2IVki4Jwe8PTwM'
+cartel_headers = ["Nº Foto", "Filename", "Timestamp", "Name", "Email", "Phone", "Photo URL ID", "Random Sort Key"]
+cartel_numcols = 5
+cartel_base_path = "/users/photosagrera/CARTEL FESTA MAJOR/Concurso 2026"
+cartel_originals_path = f"{cartel_base_path}/Originales"
+cartel_numbered_path = f"{cartel_base_path}/Numeradas"
+
+# Global dictionary to access contest parameters by name
+# Index 0: aumbert_* values | Index 1: cartel_* values
+contest_params = {
+    "contest_name": ["Concurso Agustí Umbert", "Concurso Festa Major de La Sagrera"],
+    "source_sheet_id": [aumbert_source_sheet_id, cartel_source_sheet_id],
+    "headers": [aumbert_headers, cartel_headers],
+    "numcols": [aumbert_numcols, cartel_numcols],
+    "dest_numcols": [len(aumbert_headers), len(cartel_headers)],
+    "base_path": [aumbert_base_path, cartel_base_path],
+    "originals_path": [aumbert_originals_path, cartel_originals_path],
+    "numbered_path": [aumbert_numbered_path, cartel_numbered_path]
+}
+
+source_sheet_name = "Inscripciones"           # the worksheet with the form responses from Google Forms
+destination_sheet_name = "Puntuaciones"       # the worksheet to be created with the photo entries
+folder_path = "Mi Unidad > CONCURSO 2026 > AGUSTI UMBERT TEMA LIBRE 2026" # Only for reference
+
+# Google Sheets API credentials
+scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+credentials = Credentials.from_service_account_file("credentials.json", scopes=scopes)
+
+#Selected contest index: 0 for Agustí Umbert, 1 for Cartel Fiesta Mayor
+selected_contest = 9
 
 class RetryableException(Exception):
     """Exception that can be retried"""
@@ -296,23 +320,24 @@ def get_filename_from_google_drive_url(google_drive_api, url):
         raise
 
 
-def create_destination_rows_dataset(source_workbook, source_data, google_drive_api):
+def create_destination_rows_dataset(source_data, google_drive_api):
     """Create destination rows dataset from source data for 'Puntuaciones' sheet"""
     logger.info(f"Creating destination rows dataset from source data for 'Puntuaciones' sheet")
     
     try:
         # Add headers: A (Nº Foto) + B (Filename) + C-J (original columns) + K (URL ID) + L (random sort key)
-        headers = ["Nº Foto", "Filename", "Timestamp", "Name", "Email", "Phone", "Is Member", "Is Federated", "Federation ID", "Photo URL ID", "Random Sort Key"]
-
+    
         # Build all rows from source data
-        all_rows = [headers]
+        all_rows = [contest_params["headers"][selected_contest]] # Start with header row
+        num_contest_cols = contest_params["numcols"][selected_contest]
+
         for source_row in source_data[1:]:  # Skip header row
-            if len(source_row) < 8:  # Ensure we have at least 8 columns
+            if len(source_row) < num_contest_cols:  # Ensure we have at least the numcols of the contest columns
                 logger.warning(f"Skipping incomplete row: {source_row}")
                 continue
 
-            # Extract URL list from column H (index 7)
-            url_string = source_row[7] if len(source_row) > 7 else ""
+            # Extract URL list from column H (index numcols - 1)
+            url_string = source_row[num_contest_cols-1] if len(source_row) > num_contest_cols-1 else ""
             if not url_string.strip():
                 logger.warning(f"Row with no photos: {source_row[1]}")
                 continue
@@ -327,12 +352,12 @@ def create_destination_rows_dataset(source_workbook, source_data, google_drive_a
                     try:
                         filename = get_filename_from_google_drive_url(google_drive_api, url)
                     except Exception as e:
-                        #logger.warning(f"Failed to retrieve filename for URL {url}: {str(e)}, using empty string")
+                        logger.warning(f"Failed to retrieve filename for URL {url}: {str(e)}, using empty string")
                         filename = ""
 
                     random_sort_key = random.randint(1, 1000000)
                     # Add 0 as placeholder for Nº Foto at the beginning, plus Filename as second column
-                    new_row = [0, filename] + source_row[:7] + [url, random_sort_key]
+                    new_row = [0, filename] + source_row[:num_contest_cols-1] + [url, random_sort_key]
                     all_rows.append(new_row)
                     logger.debug(f"Prepared row for URL: {url}, Filename: {filename}")
                 except Exception as e:
@@ -388,24 +413,28 @@ def setup_hidrive_folders(api):
     logger.info("Setting up HiDrive folder structure")
     
     try:
+        base_path = contest_params["base_path"][selected_contest]
+        originals_path = contest_params["originals_path"][selected_contest]
+        numbered_path = contest_params["numbered_path"][selected_contest]
+        
         # Check if Concurso 2026 folder exists
-        if not api.check_and_create_directory(HIDRIVE_BASE_PATH):
-            api.create_directory(HIDRIVE_BASE_PATH)
-            logger.info(f"Created folder: {HIDRIVE_BASE_PATH}")
+        if not api.check_and_create_directory(base_path):
+            api.create_directory(base_path)
+            logger.info(f"Created folder: {base_path}")
 
         # Setup Originales folder (delete if exists, then create)
-        if api.check_and_create_directory(HIDRIVE_ORIGINALS_PATH):
-            api.remove_directory(HIDRIVE_ORIGINALS_PATH, recursive=True)
-            logger.info(f"Removed existing folder: {HIDRIVE_ORIGINALS_PATH}")
-        api.create_directory(HIDRIVE_ORIGINALS_PATH)
-        logger.info(f"Created folder: {HIDRIVE_ORIGINALS_PATH}")
+        if api.check_and_create_directory(originals_path):
+            api.remove_directory(originals_path, recursive=True)
+            logger.info(f"Removed existing folder: {originals_path}")
+        api.create_directory(originals_path)
+        logger.info(f"Created folder: {originals_path}")
 
         # Setup Numeradas folder (delete if exists, then create)
-        if api.check_and_create_directory(HIDRIVE_NUMBERED_PATH):
-            api.remove_directory(HIDRIVE_NUMBERED_PATH, recursive=True)
-            logger.info(f"Removed existing folder: {HIDRIVE_NUMBERED_PATH}")
-        api.create_directory(HIDRIVE_NUMBERED_PATH)
-        logger.info(f"Created folder: {HIDRIVE_NUMBERED_PATH}")
+        if api.check_and_create_directory(numbered_path):
+            api.remove_directory(numbered_path, recursive=True)
+            logger.info(f"Removed existing folder: {numbered_path}")
+        api.create_directory(numbered_path)
+        logger.info(f"Created folder: {numbered_path}")
 
     except Exception as e:
         logger.error(f"Error setting up HiDrive folders: {str(e)}")
@@ -470,19 +499,21 @@ def insert_photo_number_column(worksheet):
         raise
 
 
-def upload_photos_to_Hidrive(gspread_client, hidrive_api, google_drive_api, dest_worksheet):
-    """Download photos, copy to HiDrive, and update spreadsheet with photo numbers"""
-    logger.info("Processing photos and assigning numbers")
+def upload_photos_to_Hidrive(hidrive_api, google_drive_api, dest_worksheet, selected_contest):
+    """Download photos, copy to HiDrive"""
+    logger.info("Processing photos and uploading to HiDrive")
     
     try:
         all_data = dest_worksheet.get_all_values()
         photo_number = 0
-
+        url_colum = contest_params["dest_numcols"][selected_contest] - 2  # Adjust for 0-based indexing the URL colum is the previous to the last colum
+        originals_path = contest_params["originals_path"][selected_contest]
+        numbered_path = contest_params["numbered_path"][selected_contest]
+        
         for row_index, row in enumerate(all_data[1:], start=2):  # Skip header
             try:
                 # Column K contains the URL (after adding Filename column, it's now at index 9)
-                # Column L contains random sort key (now at index 10)
-                url = row[9] if len(row) > 9 else None
+                url = row[url_colum] if len(row) > url_colum else None
                 
                 if not url or not url.strip():
                     logger.warning(f"Row {row_index} has no URL, skipping")
@@ -509,7 +540,7 @@ def upload_photos_to_Hidrive(gspread_client, hidrive_api, google_drive_api, dest
 
                 # Copy to Originales folder (use original filename)
                 try:
-                    dest_path_original = f"{HIDRIVE_ORIGINALS_PATH}/{original_numbered_filename}"
+                    dest_path_original = f"{originals_path}/{original_numbered_filename}"
                     _upload_file_to_hidrive(hidrive_api, file_handle, dest_path_original)
                     logger.debug(f"Row {row_index}: Uploaded to Originales: {original_numbered_filename}")
                 except Exception as e:
@@ -525,7 +556,7 @@ def upload_photos_to_Hidrive(gspread_client, hidrive_api, google_drive_api, dest
                 # Reset file handle and copy to Numeradas folder
                 try:
                     file_handle.seek(0)
-                    dest_path_numbered = f"{HIDRIVE_NUMBERED_PATH}/{numbered_filename}"
+                    dest_path_numbered = f"{numbered_path}/{numbered_filename}"
                     _upload_file_to_hidrive(hidrive_api, file_handle, dest_path_numbered)
                     logger.debug(f"Row {row_index}: Uploaded to Numeradas: {numbered_filename}")
                 except Exception as e:
@@ -558,17 +589,55 @@ def _upload_file_to_hidrive(api, file_handle, dest_path):
 
 def get_command_line_arguments():
     """Get command line arguments"""
-    if len(sys.argv) >= 2:
-        action = sys.argv[1]
-    else:
-        action = input("Enter action (prepare/download/process): ").strip()
-    
+    while True:
+        if len(sys.argv) >= 2:
+            action = sys.argv[1]
+        else:
+            action = input("Enter action (all/prepare/folders/upload) [all]: ").strip()
+
+        if action == "":
+            action = "all"
+        
+        if action not in ["all", "prepare", "folders", "upload"]:
+            print("Opción inválida. Por favor, entre: all, prepare, folders o upload.")
+        else:
+            break
+
     return action
 
+def select_contest_type():
+    """Display the contest selection menu and return the selected index."""
+    while True:
+        print("\n" + "="*50)
+        print("Seleccione el tipo de concurso a procesar:")
+        print("="*50)
+        print(f"1-{contest_params['contest_name'][0]}")
+        print(f"2-{contest_params['contest_name'][1]}")
+        print("FIN-Para salir sin procesar ningún concurso")
+        print("="*50)
+        
+        choice = input("\nIngrese su opción (1, 2 o Esc): ").strip().upper()
+        
+        if choice == "FIN":
+            print("Saliendo del programa...")
+            return None
+        elif choice in ["1", "2"]:
+            selected_contest = int(choice) - 1
+            return selected_contest
+        else:
+            print("Opción inválida. Por favor, ingrese 1, 2 o FIN.")
 
 def main():
-    """Main function"""
+    """Main program entry point."""
+    global selected_contest
+    
     try:
+        selected_contest = select_contest_type()
+    
+        if selected_contest is None:
+            sys.exit(0)
+    
+        print(f"\nHa seleccionado: {contest_params['contest_name'][selected_contest]}")
         action = get_command_line_arguments()
         
         # Initialize clients
@@ -585,7 +654,7 @@ def main():
             logger.info("=" * 60)
             
             # Read source spreadsheet
-            source_workbook = gspread_client.open_by_key(source_sheet_id)
+            source_workbook = gspread_client.open_by_key(contest_params["source_sheet_id"][selected_contest])
             source_worksheet = source_workbook.worksheet(source_sheet_name)
             source_data = source_worksheet.get_all_values()
             logger.info(f"Read {len(source_data) - 1} rows from source spreadsheet")
@@ -598,10 +667,11 @@ def main():
             logger.info("Creating destination sheet with extra columns and sorting by random column")
             logger.info("=" * 60)
             # Create rows dataset for 'Puntuaciones' sheet in source workbook
-            all_rows = create_destination_rows_dataset(source_workbook, source_data, google_drive_api)
+            all_rows = create_destination_rows_dataset(source_data, google_drive_api)
+            sort_column_index = contest_params["dest_numcols"][selected_contest] - 1  # Last column zero based index for random sort key
 
-            # Sort dataset by random sort key column (index 10, column K)
-            sorted_rows = sort_worksheet_by_column(all_rows, 10)  # Flat list: [header, row1, row2, ...]
+            # Sort dataset by random sort key column (index dest_, column K)
+            sorted_rows = sort_worksheet_by_column(all_rows, sort_column_index)  # Flat list: [header, row1, row2, ...]
 
             # Number photos sequentially in sorted order
             numbered_rows = number_photos(sorted_rows)  # Modifies in-place, returns reference
@@ -616,7 +686,7 @@ def main():
             logger.info("=" * 60)
             setup_hidrive_folders(hidrive_api)
 
-        # Download photos to MyHidrive 
+        # Upload photos to MyHidrive 
         if action in ["upload", "all"]:
             logger.info("=" * 60)
             logger.info("Uploading photos to HiDrive")
@@ -624,10 +694,10 @@ def main():
             
             # Re-fetch destination worksheet if needed
             if action == "upload":
-                dest_workbook = gspread_client.open_by_key(source_sheet_id)
+                dest_workbook = gspread_client.open_by_key(contest_params["source_sheet_id"][selected_contest])
                 dest_worksheet = dest_workbook.worksheet(destination_sheet_name)    
 
-            photo_count = upload_photos_to_Hidrive(gspread_client, hidrive_api, google_drive_api, dest_worksheet)
+            photo_count = upload_photos_to_Hidrive(hidrive_api, google_drive_api, dest_worksheet, selected_contest)
             logger.info(f"Successfully processed {photo_count} photos")
 
         logger.info("=" * 60)
@@ -638,6 +708,10 @@ def main():
         logger.error(f"Fatal error: {e.__doc__} - {str(e)}")
         sys.exit(1)
 
+
+
+
+   
 
 if __name__ == "__main__":
     main()
